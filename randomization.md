@@ -1,0 +1,156 @@
+# Randomization tutorial
+
+
+## Randomization in REDCap
+
+In the UW REDCap instance, there is the option to program randomization
+into the project. The below resources provide guidance on setting up the
+randomization module in REDCap.
+
+- <https://www.ctsi.ufl.edu/files/2018/12/Setting-Up-the-Randomization-Module-in-REDCap.pdf>
+
+- <https://cri.uchicago.edu/wp-content/uploads/2020/02/REDCap-Randomization-Module.pdf>
+
+However, REDCap requires the user to upload allocation tables; that is,
+you must produce a table of ordered randomized assignments for REDCap to
+use to allocate participants to intervention groups.
+
+## Producing an allocation table
+
+We need to produce two allocation tables, one for testing while the
+REDCap project is in draft mode and one for implementation when the
+project is in production mode. We can use the blockrand package to
+specify the randomization model.
+
+In the below example, we are assigning participants into one of two
+intervention groups using the num.levels argument, using blocked
+randomization with the block group size varying from 2 to 12 (double the
+value of the block.sizes argument). In addition, our randomization is
+stratified by two levels of a key variable. For each strata, we need to
+create a different randomization using the blockrand function and label
+the output using the stratum argument. Finally, because we expect more
+enrolled participants to belong to strata 2, we will produce a longer
+randomization list for strata 2 using the n argument.
+
+``` r
+### setup
+pacman::p_load(tidyverse, blockrand)
+
+
+### development randomization model (testing stage)
+
+set.seed(12345)
+
+dev_strata_1 = blockrand(n = 300,                 # number of random assignments (i.e. individuals)
+                         num.levels = 2,          # number of intervention groups
+                         stratum = "Strata 1 ",   # specify randomization strata
+                         block.sizes = c(1:6))    # block group sizes
+
+dev_strata_2 = blockrand(n = 600, 
+                         num.levels = 2,
+                         stratum = "Strata 2",
+                         block.sizes = c(1:6))
+```
+
+Note that because we are using block randomization with blocks of
+varying lengths, there may be more than the exact number of assignments
+specified depending on the set.seed. The blockrand function will always
+produce at least the number of random assignments specified by the n
+argument. So for instance, in dev_strata_2, the last randomization block
+(block 95) begins at the 599th participant and has a length of 8,
+meaning that the list has 606 assignments instead of 600.
+
+``` r
+dim(dev_strata_1)
+```
+
+    [1] 300   5
+
+``` r
+dim(dev_strata_2)
+```
+
+    [1] 606   5
+
+After producing a randomization table for each strata, we will merge the
+tables and update the formatting to match the template allocation table
+produced by REDCap. Here, the variables redcap_randomization_group and
+strata_variable_name are placeholders for the variable names in the
+downloaded template allocation table. The variables are recoded as
+numeric, to match the numeric coding of variables in REDCap.
+
+``` r
+dev_random = rbind(dev_strata_1, dev_strata_2)
+
+dev_random = dev_random |>
+  select(treatment, stratum) |>
+  rename(redcap_randomization_group = treatment, 
+         strata_variable_name = stratum) |>
+  mutate(redcap_randomization_group = ifelse(redcap_randomization_group=="A", 1, 2),
+         strata_variable_name = ifelse(strata_variable_name=="Strata 1", 1, 2))
+```
+
+We repeat the procedure using a different set.seed for the production
+randomization model, then export both tables as .csv files.
+
+``` r
+### production randomization model (participant randomization)
+
+set.seed(54321)
+
+prod_strata_1 = blockrand(n = 300, 
+                            num.levels = 2,
+                            # levels = c(1,2)
+                            stratum = "HIV+",
+                            block.sizes = c(1:6))
+
+prod_strata_2 = blockrand(n = 600, 
+                           num.levels = 2,
+                           stratum = "HEU",
+                           block.sizes = c(1:6))
+
+prod_random = rbind(prod_strata_1, prod_strata_2)
+
+prod_random = prod_random |>
+  select(treatment, stratum) |>
+  rename(redcap_randomization_group = treatment, scr_inf_hiv_status = stratum) |>
+  mutate(redcap_randomization_group = ifelse(redcap_randomization_group=="A", 1, 2),
+         scr_inf_hiv_status = ifelse(scr_inf_hiv_status=="HIV+", 1, 2))
+
+
+### export
+write.csv(dev_random, "development_randomization.csv", row.names = FALSE)
+write.csv(prod_random, "production_randomization.csv", row.names = FALSE)
+```
+
+## Additional tips
+
+- Stratification variable – when building
+
+  - Must be categorical variable
+
+  - Must be assigned to form where the variable exists
+
+- Stratification variable – when randomizing
+
+  - Value will appear after clicking randomization button
+
+  - This question is modifiable – ensure you do not change this unless
+    you know it is incorrect!
+
+  - After ensuring stratification variable value is correct, randomize
+    child
+
+  - The stratification variable and randomization assignment are now
+    both locked
+
+  - You will not be able to change the value of the stratification
+    variable after randomization
+
+  - For MAMMS specifically: because the stratification variable is also
+    a question that screens for eligibility, there is a third option
+    (HIV unexposed-uninfected) that should not be selected for any
+    enrolled child
+
+    - If this option is selected and randomization is attempted, there
+      will be an error
