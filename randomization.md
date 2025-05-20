@@ -11,26 +11,61 @@ randomization module in REDCap.
 
 - <https://cri.uchicago.edu/wp-content/uploads/2020/02/REDCap-Randomization-Module.pdf>
 
-However, REDCap requires the user to upload allocation tables; that is,
-you must produce a table of ordered randomized assignments for REDCap to
-use to allocate participants to intervention groups.
+REDCap requires the user to upload allocation tables; that is, you must
+produce a table of ordered randomized assignments for REDCap to use to
+allocate participants to intervention groups. This tutorial walks
+through an example of how to programmatically produce an allocation
+table for a project with a complex randomization model.
 
-## Producing an allocation table
+## Producing an allocation table programmatically
 
 We need to produce two allocation tables, one for testing while the
 REDCap project is in draft mode and one for implementation when the
-project is in production mode. We can use the blockrand package to
-specify the randomization model.
+project is in production mode. While we can use formulas such as RAND()
+to conduct simple randomization in Excel, this is insufficient for more
+complex randomization models that incorporate stratified randomization
+or randomization blocks of varying sizes. For these cases, we can use
+the blockrand package in R to specify the randomization model.
 
-In the below example, we are assigning participants into one of two
-intervention groups using the num.levels argument, using blocked
-randomization with the block group size varying from 2 to 12 (double the
-value of the block.sizes argument). In addition, our randomization is
-stratified by two levels of a key variable. For each strata, we need to
-create a different randomization using the blockrand function and label
-the output using the stratum argument. Finally, because we expect more
-enrolled participants to belong to strata 2, we will produce a longer
-randomization list for strata 2 using the n argument.
+### Arguments
+
+- n specifies the number of random assignments to generate
+
+  - It is best practice to produce many more random assignments than are
+    expected to be necessary because it is not possible to change the
+    list after the project is in production mode
+
+  - This protects against unforeseen circumstances; for instance, if a
+    participant is randomized and later deemed ineligible for
+    participation
+
+  - So for instance, if expect to enroll 300 participants, we might
+    provide 350 randomized allocations
+
+- num.levels specifies the number of intervention groups
+
+  - In the below example, we are assigning participants into one of two
+    intervention groups
+
+- block.sizes specifies the block group size for blocked randomization
+
+  - In this example, we use blocks varying in size from 2 to 12 (double
+    the value of the block.sizes argument)
+
+- stratum is used to label which strata the randomization applies to
+
+  - When using stratified randomization, we need to create a separate
+    randomization table for each level of the stratified variable
+
+  - In the below example, we produce two tables for two different strata
+
+  - Note that in this example because we expect more enrolled
+    participants to belong to strata 2, we produced a longer
+    randomization list for strata 2 using the n argument
+
+  - If there is stratification by more than one variable (for instance,
+    by site and by a clinical variable), then you would need to produce
+    a randomization table for each unique combination of strata
 
 ``` r
 ### setup
@@ -91,7 +126,8 @@ dev_random = dev_random |>
 ```
 
 We repeat the procedure using a different set.seed for the production
-randomization model, then export both tables as .csv files.
+randomization model, then export both tables as .csv files for uploading
+to REDCap.
 
 ``` r
 ### production randomization model (participant randomization)
@@ -116,8 +152,9 @@ prod_random = prod_random |>
   rename(redcap_randomization_group = treatment, scr_inf_hiv_status = stratum) |>
   mutate(redcap_randomization_group = ifelse(redcap_randomization_group=="A", 1, 2),
          scr_inf_hiv_status = ifelse(scr_inf_hiv_status=="HIV+", 1, 2))
+```
 
-
+``` r
 ### export
 write.csv(dev_random, "development_randomization.csv", row.names = FALSE)
 write.csv(prod_random, "production_randomization.csv", row.names = FALSE)
@@ -125,32 +162,20 @@ write.csv(prod_random, "production_randomization.csv", row.names = FALSE)
 
 ## Additional tips
 
-- Stratification variable – when building
+- Stratification variable
 
-  - Must be categorical variable
+  - When setting up the randomization model, the stratification variable
+    must be categorical and must be assigned to the same form where the
+    variable exists
 
-  - Must be assigned to form where the variable exists
+  - When randomizing
 
-- Stratification variable – when randomizing
+    - After clicking the randomization button, the stratification
+      variable will appear so the user can verify the value
 
-  - Value will appear after clicking randomization button
+    - This pop-up question is modifiable, so do not change the value
+      unless you know the previously marked value is incorrect
 
-  - This question is modifiable – ensure you do not change this unless
-    you know it is incorrect!
-
-  - After ensuring stratification variable value is correct, randomize
-    child
-
-  - The stratification variable and randomization assignment are now
-    both locked
-
-  - You will not be able to change the value of the stratification
-    variable after randomization
-
-  - For MAMMS specifically: because the stratification variable is also
-    a question that screens for eligibility, there is a third option
-    (HIV unexposed-uninfected) that should not be selected for any
-    enrolled child
-
-    - If this option is selected and randomization is attempted, there
-      will be an error
+    - It is *very important* to verify that the stratification value is
+      correct because after randomizing, the value of the stratification
+      variable and the randomization assignment will both be locked
