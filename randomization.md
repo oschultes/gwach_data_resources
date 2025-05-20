@@ -87,6 +87,8 @@ dev_strata_2 = blockrand(n = 600,
                          block.sizes = c(1:6))
 ```
 
+
+
 Note that because we are using block randomization with blocks of
 varying lengths, there may be more than the exact number of assignments
 specified depending on the set.seed. The blockrand function will always
