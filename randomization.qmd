@@ -1,6 +1,6 @@
 ---
 title: "Randomization tutorial"
-format: html
+format: gfm
 editor: visual
 ---
 
